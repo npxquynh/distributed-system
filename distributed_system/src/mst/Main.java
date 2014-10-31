@@ -12,5 +12,7 @@ import java.util.List;
 			Network network = new Network();
 			
 			MyFirstApp app = new MyFirstApp(fileName, network);
+			
+			network.simulate();
 		}
 }

@@ -58,11 +58,7 @@ public class MyFirstApp {
 						
 						Node node = new Node(id, posX, posY, energy, minBudget);
 						network.addNode(node);
-					}
-					for (String s : parts) {
-						System.out.println(s);
-					}
-					
+					}					
 				}
 			}
 			else if (line.matches(regex2)) {
