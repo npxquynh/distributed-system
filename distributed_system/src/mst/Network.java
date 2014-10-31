@@ -6,11 +6,15 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import mst.Message.MessageType;
+
 public class Network {
 	// public
 	public double minBudget;
 	public double R;
-	public Map<Integer, Node> nodesMap;
+	private String stage;
+	private Map<Integer, Node> nodesMap;
+	private EdgeWeightedGraph graph;
 	
 	/**
 	 * default constructor
@@ -18,6 +22,7 @@ public class Network {
 	public Network() {
 		this.R = 10;
 		nodesMap = new HashMap<Integer, Node>();
+		graph = new EdgeWeightedGraph(nodesMap.size());
 	}
 	
 	/**
@@ -28,12 +33,43 @@ public class Network {
 	public void simulate() {
 		int i = 0;
 		
+		/*
+		 * TASK 1: CREATE NETWORK
+		 */
 		while (this.isCreatingNetwork()) {
+			System.out.println("-----Communicating---------");
 			/*
 			 * 1st stage: sending message toward different nodes
 			 */
 			this.stageCommunicating();
 			
+			System.out.println("-----Processing---------");
+			/*
+			 * 2nd stage: processing messages within each nodes
+			 */
+			this.stageProcessing();
+		}
+		
+		// TODO remove later
+		// test the edge creation
+		for (Node node : this.nodesMap.values()) {
+			node.printEdges();
+		}
+		
+		/*
+		 * TASK 2: CREATE MINIMUM SPANNING TREE
+		 */
+		
+		this.wakeUpAllNodes();
+		
+		while (this.isCreatingMST()) {
+			System.out.println("-----Communicating---------");
+			/*
+			 * 1st stage: sending message toward different nodes
+			 */
+			this.stageCommunicating();
+			
+			System.out.println("-----Processing---------");
 			/*
 			 * 2nd stage: processing messages within each nodes
 			 */
@@ -57,26 +93,33 @@ public class Network {
 		return false;
 	}
 	
+	/**
+	 * TODO didn't finish it yet
+	 * factor with isCreatingNetwork?
+	 * @return
+	 */
+	public boolean isCreatingMST() {
+		for (Node node : this.nodesMap.values()) {
+			if (node.hasMessageToProcess() || node.hasMessageToSend()) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	public void stageCommunicating() {
-		Iterator it = nodesMap.entrySet().iterator();
-		while (it.hasNext()) {
-			Map.Entry<Integer, Node> pairs = (Map.Entry<Integer, Node>) it.next();
-			Integer nodeId = pairs.getKey();
-			Node node = pairs.getValue();
-			
+		for (Node node : nodesMap.values()) {			
 			while (node.hasMessageToSend()) {
 				Message message = node.getMessage();
 				this.sendMessage(message);					
 			}
-			
-			it.remove();
 		}
 	}
 	
 	public void sendMessage(Message message) {
-		System.out.println("Sending" + message.type);
+		System.out.println("Sending: " + message.type);
 		
-		if (message.type == "discover") {
+		if (message.type == MessageType.DISCOVER) {
 			Node currentNode = this.getNode(message.senderId);
 			List<Node> nodesWithinRange = this.findNodeWithinRange(currentNode);
 			
@@ -84,7 +127,11 @@ public class Network {
 				System.out.println("Node within range: " + String.valueOf(node.id));
 				node.receiveMessage(message);
 			}
+		} else {
+			Node node = nodesMap.get(message.receiverId);
+			node.receiveMessage(message);
 		}
+		
 	}
 	
 	public List<Node> findNodeWithinRange(Node currentNode) {
@@ -108,13 +155,17 @@ public class Network {
 	}
 	
 	public void stageProcessing() {
-		boolean ongoingFlag = true;
 		for (Node node : nodesMap.values()) {
+//			System.out.println("stage processing node - " + String.valueOf(node.id));
 			node.processMessages();
 		}
 	}
 	
-
+	public void wakeUpAllNodes() {
+		for (Node node : nodesMap.values()) {
+			node.wakeUp();
+		}
+	}
 	
 
 	

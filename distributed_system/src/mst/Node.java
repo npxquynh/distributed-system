@@ -1,7 +1,11 @@
 package mst;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Queue;
+
+import mst.Edge.SE;
+import mst.Message.MessageType;
 
 public class Node {	
 	// public
@@ -12,15 +16,17 @@ public class Node {
 	final public double minBudget;
 	public Queue<Message> messages = new LinkedList<Message>();
 	public Queue<Message> inboxMessages = new LinkedList<Message>();
+	
+	private Bag<Edge> adjcentEdges;
 	public enum SN { SLEEPING, FIND, FOUND };
-	public enum SE { BASIC, BRANCH, REJECTED };
+	public SN stateNode;
 	public int fragmentIdentity;
-	public int level;
-	public int bestEdge;
-	public int bestWeight;
-	public int testEdge;
-	public int inBranch;
+	public int levelNode;
+	public Integer bestEdge;
+	public double bestWeight;
+	public Integer testEdge;
 	public int findCount;
+	public int inBranch;
 	
 	public Node(int id, double posX, double posY, double energy, double minBudget) {
 		this.id = id;
@@ -29,9 +35,10 @@ public class Node {
 		this.energy = energy;
 		this.minBudget = minBudget;
 		
-		System.out.println("Node created: " + String.valueOf(this.id));
+//		System.out.println("Node created: " + String.valueOf(this.id));
 		
 		this.discover();
+		adjcentEdges = new Bag<Edge>();
 	}
 	
 	/**
@@ -40,20 +47,23 @@ public class Node {
 	 * @return
 	 */
 	public double distanceToNode(Node node) {
-		double dist = Math.sqrt(Math.pow(this.posX - node.posX, 2) + 
-				Math.pow(this.posY - node.posY, 2));
+		return this.distanceToPos(node.posX, node.posY);
+	}
+	
+	public double distanceToPos(double posX2, double posY2) {
+		double dist = Math.sqrt(Math.pow(this.posX - posX2, 2) + 
+				Math.pow(this.posY - posY2, 2));
 		
 		return dist;
 	}
 	
 	public void discover() {
-		System.out.println("discover");
-		Message message = new Message(this.id, 0, "discover", "");
+		Message message = new Message(this.id, 0, MessageType.DISCOVER, "");
 		this.messages.add(message);
 	}
 	
 	public boolean hasMessageToSend() {
-		return !this.messages.isEmpty();
+		return !messages.isEmpty();
 	}
 	
 	public Message getMessage() {
@@ -69,7 +79,7 @@ public class Node {
 	}
 	
 	public boolean hasMessageToProcess() {
-		return this.inboxMessages.isEmpty();
+		return !inboxMessages.isEmpty();
 	}
 	
 	public void sendMessage(Message message) {
@@ -86,16 +96,381 @@ public class Node {
 	public void processMessages() {
 		Message message = new Message();
 		
+		System.out.println("\nPROCESS");
 		if (this.hasMessageToProcess()) {
 			while ((message = this.getInboxMessage()) != null) {
-				System.out.println("Process" + message.type);
+				System.out.println("Process " + message.type);
 				
-				if (message.type == "discover") {
+				if (message.type == MessageType.DISCOVER) {
 					String messageContent = String.valueOf(this.posX) + "\t" + String.valueOf(this.posY);
-					Message draft = new Message(this.id, message.senderId, "neighbor", messageContent);
+					Message draft = new Message(this.id, message.senderId, MessageType.NEIGHBOR, messageContent);
 					this.sendMessage(draft);
+				}
+				else if (message.type == MessageType.NEIGHBOR) {
+					if (message.receiverId == this.id) {
+						String[] content = message.content.split("\t");
+						
+						double posX = Double.valueOf(content[0]);
+						double posY = Double.valueOf(content[1]);
+						double weight = this.distanceToPos(posX, posY);
+						
+						Edge edge = new Edge(this.id, message.senderId, weight);
+						this.adjcentEdges.add(edge);
+						
+					}
+				}
+				else if (message.type == MessageType.CONNECT) {
+					this.processConnectMessage(message);
+				}
+				else if (message.type == MessageType.INITIATE) {
+					this.processInitiateMessage(message);
+				}
+				else if (message.type == MessageType.TEST) {
+					this.processTestMessage(message);
 				}
 			}
 		}
 	}
+	
+	/**
+	 * Function number (3) in the SynchGHS paper
+	 * @param message
+	 */
+	public void processConnectMessage(Message message) {
+		int levelConnect = Integer.valueOf(message.content);
+		Edge edge = this.findMinAdjcentEdge();
+		
+		if (edge == null) return;
+		
+		if (this.stateNode == SN.SLEEPING) {
+			this.wakeUp();
+			if (levelConnect < levelNode) {
+				edge.setStateEdge(SE.BRANCH);
+				
+				// TODO think about way to code the message
+				int senderId = this.id;
+				int receiverId = message.receiverId;
+				String content = String.format("%s\t%s\t%s", this.levelNode, 
+						this.fragmentIdentity, this.stateNode);
+				
+				Message initiateMessage = new Message(senderId, receiverId,
+						MessageType.CONNECT, content);
+				this.sendMessage(initiateMessage);
+				
+				if (this.stateNode == SN.FIND) {
+					this.findCount += 1;
+				}
+			}
+		}
+		else if (edge.getStateEdge() == SE.BASIC) {
+			System.out.println("Basic");
+			this.receiveMessage(message); // put message on end of queue
+		} else {
+			// TODO think about way to code the message
+			int senderId = this.id;
+			int receiverId = message.receiverId;
+			// TODO check the pseudocode again
+			String content = String.format("%s\t%s\t%s", this.levelNode + 1, 
+					this.fragmentIdentity, SN.FIND);
+			
+			System.out.println(content);
+			
+			Message initiateMessage = new Message(senderId, receiverId,
+					MessageType.INITIATE, content);
+			this.sendMessage(initiateMessage);
+		}
+	}
+	
+	/**
+	 * Function number (4) in the SynchGHS paper
+	 * @param message
+	 */
+	public void processInitiateMessage(Message message) {
+		Edge currentEdge = this.findEdge(message.senderId);
+		
+		if (currentEdge == null) return;
+		
+		String[] splitedContent = message.content.split("\t");
+		int L = Integer.valueOf(splitedContent[0]);
+		int F = Integer.valueOf(splitedContent[1]);		
+		SN S = SN.valueOf(splitedContent[2]);
+		
+		this.levelNode = L;
+		this.fragmentIdentity = F;
+		this.stateNode = S;
+		
+		this.inBranch = message.senderId;
+		this.bestEdge = null;
+		this.bestWeight = Double.POSITIVE_INFINITY;
+		
+		for (Edge edge : adjcentEdges) {
+			if (edge.equals(currentEdge)) {
+				System.out.println("Equal Edge");
+			}
+			else {
+				if (edge.getStateEdge() == SE.BRANCH) {
+					// TODO think about way to code the message
+					int senderId = this.id;
+					int receiverId = edge.other(this.id);
+					String content = String.format("%d\t%d\t%s", L, F, S);
+					
+					System.out.println("Content - " + content);
+					
+					Message initiateMessage = new Message(senderId, receiverId,
+							MessageType.INITIATE, content);
+					this.sendMessage(initiateMessage);
+				}
+			}
+		}
+		if (S == SN.FIND) {
+			this.test();
+		}
+	}
+	
+	/**
+	 * Function number (6) in the SynchGHS paper
+	 */
+	public void processTestMessage(Message message) {
+		Edge currentEdge = this.findEdge(message.senderId);
+		if (currentEdge == null) return;
+		
+		if (this.stateNode == SN.SLEEPING) this.wakeUp();
+		
+		String[] splitedContent = message.content.split("\t");
+		int L = Integer.valueOf(splitedContent[0]);
+		int F = Integer.valueOf(splitedContent[1]);
+		
+		// TODO if error happens, then check whether to use receiveMessage() or sendMessage()
+		if (L > this.levelNode) { 
+			this.receiveMessage(message);
+		}
+		else if (F != this.fragmentIdentity) {
+			// TODO think about way to code the message
+			int senderId = this.id;
+			int receiverId = currentEdge.other(this.id);
+			
+			Message acceptMessage = new Message(senderId, receiverId,
+					MessageType.ACCEPT, "");
+			this.sendMessage(acceptMessage);
+		}
+		else {
+			if (currentEdge.getStateEdge() != SE.BASIC) {
+				currentEdge.setStateEdge(SE.REJECTED);
+			}
+			if (this.testEdge != (Integer) currentEdge.other(this.id)) {
+				// TODO think about way to code the message
+				int senderId = this.id;
+				int receiverId = currentEdge.other(this.id);
+				
+				Message rejectMessage = new Message(senderId, receiverId, MessageType.REJECT, "");
+			}
+			else {
+				this.test();
+			}
+		}		
+	}
+	
+	/**
+	 * Function number (7) in the SynchGHS paper
+	 * @param message
+	 */
+	public void processAcceptMessage(Message message) {
+		Edge currentEdge = this.findEdge(message.senderId);
+		if (currentEdge == null) return;
+		
+		int j = currentEdge.other(this.id);
+		
+		this.testEdge = null;
+		if (currentEdge.weight() < this.bestWeight) {
+			this.bestEdge = j;
+			this.bestWeight = currentEdge.weight();
+		}
+		
+		this.report();
+	}
+	
+	/**
+	 * Function number (8) in the SynchGHS paper
+	 * @param message
+	 */
+	public void processRejectMessage(Message message) {
+		Edge currentEdge = this.findEdge(message.senderId);
+		if (currentEdge == null) return;
+		
+		if (currentEdge.getStateEdge() == SE.BASIC) {
+			currentEdge.setStateEdge(SE.REJECTED);
+			this.test();
+		}
+	}
+	
+	/**
+	 * Function number (10) in the SynchGHS paper
+	 * @param message
+	 */
+	public void processReportMessage(Message message) {
+		Edge currentEdge = this.findEdge(message.senderId);
+		if (currentEdge == null) return;
+		
+		int j = currentEdge.other(this.id);
+		
+		double w = Double.valueOf(message.content);
+		
+		if (j != this.inBranch) {
+			this.findCount = this.findCount - 1;
+			
+			if (w < this.bestWeight) {
+				this.bestWeight = w;
+				this.bestEdge = j;
+				
+				this.report();
+			}
+			else if (this.stateNode == SN.FIND) {
+					// TODO check whether send/receive
+					this.receiveMessage(message);
+			}
+			else if (w > this.bestWeight) {
+				this.changeRoot();
+			}
+			else if (w == this.bestWeight) {
+				// TODO how to halt everything
+				System.out.println("SERIOUS ERROR WITH THE SAME WEIGHT");
+			}
+		}
+	}
+	
+	/**
+	 * Function number (12) in the SynchGHS paper
+	 * @param message
+	 */
+	public void processChangeRootMessage(Message message) {
+		this.changeRoot();
+	}
+	
+	public void printEdges() {
+		System.out.println("Number of adjcent edges: " + String.valueOf(adjcentEdges.size()));
+		for (Edge edge : adjcentEdges) {
+			System.out.println(edge.toString());
+		}
+	}
+	
+	public Edge findMinAdjcentEdge() {
+		double minWeight = Double.POSITIVE_INFINITY;
+		Edge tmpEdge = null;
+		
+		for (Edge edge : adjcentEdges) {
+			if (edge.weight() < minWeight) {
+				minWeight = edge.weight();
+				tmpEdge = edge;
+			}
+		}
+		
+//		System.out.println(String.format("Found Edge: %s", tmpEdge.toString()));
+		return tmpEdge;
+	}
+	
+	public Edge findEdge(int nodeId) {
+		for (Edge edge : adjcentEdges) {
+			if (edge.other(this.id) == nodeId) {
+				return edge;
+			}
+		}
+		return null;
+	}
+	
+	public void wakeUp() {
+		Edge minAdjEdge = this.findMinAdjcentEdge();
+		minAdjEdge.setStateEdge(Edge.SE.BRANCH);
+		this.levelNode = 0;
+		this.stateNode = SN.FOUND;
+		this.findCount = 0;
+		
+		Message connectMessage = new Message(this.id, minAdjEdge.other(this.id), 
+				MessageType.CONNECT, "0");
+		
+		this.sendMessage(connectMessage);
+	}
+	
+	/**
+	 * Function number (5) in the SynchGHS paper
+	 */
+	public void test() {
+		Double minWeight = Double.POSITIVE_INFINITY;
+		Edge tmpEdge = null;
+		
+		for (Edge edge : adjcentEdges) {
+			if (edge.getStateEdge() == SE.BASIC) {
+				if (edge.weight() < minWeight) {
+					minWeight = edge.weight();
+					tmpEdge = edge;
+				}
+			}
+		}
+		
+		if (tmpEdge != null) {
+			// TODO think about way to code the message
+			int senderId = this.id;
+			int receiverId = tmpEdge.other(this.id);
+			String content = String.format("%d\t%d", this.levelNode, this.fragmentIdentity);
+			
+			Message testMessage = new Message(senderId, receiverId,
+					MessageType.TEST, content);
+			
+			this.sendMessage(testMessage);
+		}
+		else {
+			this.testEdge = null;
+			this.report();
+		}
+	}
+	
+	/**
+	 * Function number (9) in the SynchGHS paper
+	 */
+	public void report() {
+		if (this.findCount == 0 && this.testEdge == null) {
+			this.stateNode = SN.FOUND;
+			
+			// TODO think about way to code the message
+			int senderId = this.id;
+			int receiverId = this.inBranch;
+			String content = String.format("%f", this.bestWeight);
+			
+			Message reportMessage = new Message(senderId, receiverId,
+					MessageType.REPORT, content);
+			this.sendMessage(reportMessage);
+		}
+	}
+	
+	/**
+	 * Function number (11) in the SynchGHS paper
+	 */
+	public void changeRoot() {
+		Edge edge = this.findEdge(this.bestEdge);
+		
+		if (edge == null) {
+			System.out.print("changeRoot() - NULL Edge");
+		}
+		
+		if (edge.getStateEdge() == SE.BRANCH) {
+			// TODO think about way to code the message
+			int senderId = this.id;
+			int receiverId = this.bestEdge;
+			
+			Message changeRootMessage = new Message(senderId, receiverId,
+					MessageType.CHANGEROOT, "");
+			this.sendMessage(changeRootMessage);
+		}
+		else {
+			// TODO think about way to code the message
+			int senderId = this.id;
+			int receiverId = this.bestEdge;
+			
+			Message connectMessage = new Message(senderId, receiverId,
+					MessageType.CONNECT, "");
+			this.sendMessage(connectMessage);
+			
+			edge.setStateEdge(SE.BRANCH);
+		}
+	}
+
 }
