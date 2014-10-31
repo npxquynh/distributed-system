@@ -22,6 +22,7 @@ public class Network {
 	
 	public void simulate() {
 		int i = 0;
+		
 		boolean ongoingFlag = true;
 		while (ongoingFlag) {
 			Iterator it = nodesMap.entrySet().iterator();
