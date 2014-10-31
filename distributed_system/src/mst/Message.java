@@ -6,6 +6,10 @@ public class Message {
 	public String type;
 	public String content;
 	
+	public Message() {
+		
+	}
+	
 	public Message(int senderId, int receiverId, String type, String content) {
 		this.senderId = senderId;
 		this.receiverId = receiverId;

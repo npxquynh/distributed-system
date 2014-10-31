@@ -47,14 +47,13 @@ public class Node {
 	}
 	
 	public void discover() {
-		System.out.println("discovery");
-		Message message = new Message(this.id, 0, "discovery", "");
+		System.out.println("discover");
+		Message message = new Message(this.id, 0, "discover", "");
 		this.messages.add(message);
 	}
 	
-	public boolean hasMessage() {
-		System.out.print(!messages.isEmpty());
-		return !messages.isEmpty();
+	public boolean hasMessageToSend() {
+		return !this.messages.isEmpty();
 	}
 	
 	public Message getMessage() {
@@ -67,5 +66,36 @@ public class Node {
 	public void receiveMessage(Message message) {
 		this.inboxMessages.add(message);
 		System.out.println("Got Message");
+	}
+	
+	public boolean hasMessageToProcess() {
+		return this.inboxMessages.isEmpty();
+	}
+	
+	public void sendMessage(Message message) {
+		this.messages.add(message);
+	}
+	
+	public Message getInboxMessage() {
+		if (this.hasMessageToProcess()) {
+			return this.inboxMessages.remove();
+		}
+		return null;
+	}
+	
+	public void processMessages() {
+		Message message = new Message();
+		
+		if (this.hasMessageToProcess()) {
+			while ((message = this.getInboxMessage()) != null) {
+				System.out.println("Process" + message.type);
+				
+				if (message.type == "discover") {
+					String messageContent = String.valueOf(this.posX) + "\t" + String.valueOf(this.posY);
+					Message draft = new Message(this.id, message.senderId, "neighbor", messageContent);
+					this.sendMessage(draft);
+				}
+			}
+		}
 	}
 }
