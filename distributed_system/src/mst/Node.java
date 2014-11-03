@@ -20,7 +20,7 @@ public class Node {
 	private Bag<Edge> adjcentEdges;
 	public enum SN { SLEEPING, FIND, FOUND };
 	public SN stateNode;
-	public int fragmentIdentity;
+	public double fragmentIdentity;
 	public int levelNode;
 	public Integer bestEdge;
 	public double bestWeight;
@@ -34,6 +34,8 @@ public class Node {
 		this.posY = posY;
 		this.energy = energy;
 		this.minBudget = minBudget;
+		
+		this.stateNode = SN.SLEEPING;
 		
 //		System.out.println("Node created: " + String.valueOf(this.id));
 		
@@ -75,7 +77,7 @@ public class Node {
 	
 	public void receiveMessage(Message message) {
 		this.inboxMessages.add(message);
-		System.out.println("Got Message");
+//		System.out.println("Got Message");
 	}
 	
 	public boolean hasMessageToProcess() {
@@ -83,6 +85,7 @@ public class Node {
 	}
 	
 	public void sendMessage(Message message) {
+		System.out.println("Queue sending: " + message.toString());
 		this.messages.add(message);
 	}
 	
@@ -96,10 +99,15 @@ public class Node {
 	public void processMessages() {
 		Message message = new Message();
 		
-		System.out.println("\nPROCESS");
-		if (this.hasMessageToProcess()) {
-			while ((message = this.getInboxMessage()) != null) {
-				System.out.println("Process " + message.type);
+		System.out.println(String.format("\n*** PROCESS at node %d", this.id));
+		int l = this.inboxMessages.size();
+		int count = 0;
+		while (count < l) {
+			count += 1;
+			
+			message = this.getInboxMessage();
+			if (message != null) {
+				System.out.println("Processing: " + message.toString());
 				
 				if (message.type == MessageType.DISCOVER) {
 					String messageContent = String.valueOf(this.posX) + "\t" + String.valueOf(this.posY);
@@ -138,19 +146,21 @@ public class Node {
 	 */
 	public void processConnectMessage(Message message) {
 		int levelConnect = Integer.valueOf(message.content);
-		Edge edge = this.findMinAdjcentEdge();
+		Edge currentEdge = this.findEdge(message.senderId);
 		
-		if (edge == null) return;
+		if (currentEdge == null) return;
+		
+		System.out.println(currentEdge.toString());
 		
 		if (this.stateNode == SN.SLEEPING) {
 			this.wakeUp();
 			if (levelConnect < levelNode) {
-				edge.setStateEdge(SE.BRANCH);
+				currentEdge.setStateEdge(SE.BRANCH);
 				
 				// TODO think about way to code the message
 				int senderId = this.id;
-				int receiverId = message.receiverId;
-				String content = String.format("%s\t%s\t%s", this.levelNode, 
+				int receiverId = message.senderId;
+				String content = String.format("%s\t%f\t%s", this.levelNode, 
 						this.fragmentIdentity, this.stateNode);
 				
 				Message initiateMessage = new Message(senderId, receiverId,
@@ -162,18 +172,17 @@ public class Node {
 				}
 			}
 		}
-		else if (edge.getStateEdge() == SE.BASIC) {
+		else if (currentEdge.getStateEdge() == SE.BASIC) {
 			System.out.println("Basic");
 			this.receiveMessage(message); // put message on end of queue
 		} else {
 			// TODO think about way to code the message
 			int senderId = this.id;
-			int receiverId = message.receiverId;
+			int receiverId = message.senderId;
 			// TODO check the pseudocode again
-			String content = String.format("%s\t%s\t%s", this.levelNode + 1, 
-					this.fragmentIdentity, SN.FIND);
-			
-			System.out.println(content);
+			double fragmentIdentity = currentEdge.weight();
+			String content = String.format("%s\t%f\t%s", this.levelNode + 1, 
+					fragmentIdentity, SN.FIND);
 			
 			Message initiateMessage = new Message(senderId, receiverId,
 					MessageType.INITIATE, content);
@@ -192,11 +201,12 @@ public class Node {
 		
 		String[] splitedContent = message.content.split("\t");
 		int L = Integer.valueOf(splitedContent[0]);
-		int F = Integer.valueOf(splitedContent[1]);		
+		double F = Double.valueOf(splitedContent[1]);		
 		SN S = SN.valueOf(splitedContent[2]);
 		
 		this.levelNode = L;
 		this.fragmentIdentity = F;
+		System.out.println("process_initiate - FN = " + String.valueOf(this.fragmentIdentity));
 		this.stateNode = S;
 		
 		this.inBranch = message.senderId;
@@ -204,6 +214,8 @@ public class Node {
 		this.bestWeight = Double.POSITIVE_INFINITY;
 		
 		for (Edge edge : adjcentEdges) {
+			System.out.println("Initiate - Edge type" + edge.toString());
+			
 			if (edge.equals(currentEdge)) {
 				System.out.println("Equal Edge");
 			}
@@ -219,6 +231,10 @@ public class Node {
 					Message initiateMessage = new Message(senderId, receiverId,
 							MessageType.INITIATE, content);
 					this.sendMessage(initiateMessage);
+					
+					if (S == SN.FIND) {
+						this.findCount += 1;
+					}
 				}
 			}
 		}
@@ -238,13 +254,19 @@ public class Node {
 		
 		String[] splitedContent = message.content.split("\t");
 		int L = Integer.valueOf(splitedContent[0]);
-		int F = Integer.valueOf(splitedContent[1]);
+		double F = Double.valueOf(splitedContent[1]);
 		
 		// TODO if error happens, then check whether to use receiveMessage() or sendMessage()
+		// TODO remove println
+		System.out.println(String.format("Test F %f FN %f", F, this.fragmentIdentity));
+		System.out.println(String.format("Test L %d LN %d", L, this.levelNode));
+		
 		if (L > this.levelNode) { 
+			System.out.println("== Test condition 1");
 			this.receiveMessage(message);
 		}
 		else if (F != this.fragmentIdentity) {
+			System.out.println("== Test condition 2");
 			// TODO think about way to code the message
 			int senderId = this.id;
 			int receiverId = currentEdge.other(this.id);
@@ -254,7 +276,9 @@ public class Node {
 			this.sendMessage(acceptMessage);
 		}
 		else {
-			if (currentEdge.getStateEdge() != SE.BASIC) {
+			System.out.println("== Test condition 3");
+			System.out.println(String.format("== Test TEST_EDGE: %d", this.testEdge));
+			if (currentEdge.getStateEdge() == SE.BASIC) {
 				currentEdge.setStateEdge(SE.REJECTED);
 			}
 			if (this.testEdge != (Integer) currentEdge.other(this.id)) {
@@ -263,6 +287,7 @@ public class Node {
 				int receiverId = currentEdge.other(this.id);
 				
 				Message rejectMessage = new Message(senderId, receiverId, MessageType.REJECT, "");
+				this.sendMessage(rejectMessage);
 			}
 			else {
 				this.test();
@@ -378,16 +403,21 @@ public class Node {
 	}
 	
 	public void wakeUp() {
-		Edge minAdjEdge = this.findMinAdjcentEdge();
-		minAdjEdge.setStateEdge(Edge.SE.BRANCH);
-		this.levelNode = 0;
-		this.stateNode = SN.FOUND;
-		this.findCount = 0;
-		
-		Message connectMessage = new Message(this.id, minAdjEdge.other(this.id), 
-				MessageType.CONNECT, "0");
-		
-		this.sendMessage(connectMessage);
+		if (this.stateNode == SN.SLEEPING) {
+			Edge minAdjEdge = this.findMinAdjcentEdge();
+			if (minAdjEdge != null) {
+				minAdjEdge.setStateEdge(Edge.SE.BRANCH);
+			
+				this.levelNode = 0;
+				this.stateNode = SN.FOUND;
+				this.findCount = 0;
+				
+				Message connectMessage = new Message(this.id, minAdjEdge.other(this.id), 
+						MessageType.CONNECT, "0");
+				
+				this.sendMessage(connectMessage);
+			}
+		}
 	}
 	
 	/**
@@ -402,15 +432,19 @@ public class Node {
 				if (edge.weight() < minWeight) {
 					minWeight = edge.weight();
 					tmpEdge = edge;
+					System.out.println("Test BASIC Edge: " + edge.toString());
 				}
 			}
 		}
 		
 		if (tmpEdge != null) {
+			this.testEdge = tmpEdge.other(this.id);
+			System.out.println("Test() - set testEdge" + String.valueOf(this.testEdge));
+			
 			// TODO think about way to code the message
 			int senderId = this.id;
 			int receiverId = tmpEdge.other(this.id);
-			String content = String.format("%d\t%d", this.levelNode, this.fragmentIdentity);
+			String content = String.format("%d\t%f", this.levelNode, this.fragmentIdentity);
 			
 			Message testMessage = new Message(senderId, receiverId,
 					MessageType.TEST, content);
@@ -471,6 +505,10 @@ public class Node {
 			
 			edge.setStateEdge(SE.BRANCH);
 		}
+	}
+	
+	public String toStringMST() {
+		return String.format("Node %d - BestEdge %d - BestWeight %f - inBranch %d", this.id, this.bestEdge, this.bestWeight, this.inBranch);
 	}
 
 }

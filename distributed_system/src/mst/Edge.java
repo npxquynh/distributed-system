@@ -17,7 +17,9 @@ public class Edge {
 	}
 
 	public void setStateEdge(SE stateEdge) {
+		System.out.println(this.toString());
 		this.stateEdge = stateEdge;
+		System.out.println(this.toString());
 	}
 
 	/**
@@ -82,6 +84,6 @@ public class Edge {
      * @return a string representation of the edge
      */
     public String toString() {
-        return String.format("%d-%d %.5f", v, w, weight);
+        return String.format("%d-%d %.5f\t%s", v, w, weight, String.valueOf(stateEdge));
     }
 }

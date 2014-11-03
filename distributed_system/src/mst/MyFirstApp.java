@@ -68,7 +68,7 @@ public class MyFirstApp {
 	}
 	
 	List<String> readTextFile(String fileName) throws IOException {
-		Path path = Paths.get("./input/input0.txt");
+		Path path = Paths.get(fileName);
 		return Files.readAllLines(path, ENCODING);
 	}
 	

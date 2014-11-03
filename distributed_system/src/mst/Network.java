@@ -62,18 +62,27 @@ public class Network {
 		
 		this.wakeUpAllNodes();
 		
-		while (this.isCreatingMST()) {
-			System.out.println("-----Communicating---------");
+		int count = 0;
+		
+		while (count < 10) {
+			count += 1;
+//		while (this.isCreatingMST()) {
+			System.out.println(String.format("\n ========== COMMUNICATING %d ========", count));
 			/*
 			 * 1st stage: sending message toward different nodes
 			 */
 			this.stageCommunicating();
 			
-			System.out.println("-----Processing---------");
+			System.out.println(String.format("\n ========= PROCESSING %d ========", count));
 			/*
 			 * 2nd stage: processing messages within each nodes
 			 */
 			this.stageProcessing();
+		}
+		
+		// TODO remove later, this is for printing after the MST creation
+		for (Node node : this.nodesMap.values()) {
+			System.out.println(node.toStringMST());
 		}
 	}	
 	
@@ -108,7 +117,8 @@ public class Network {
 	}
 	
 	public void stageCommunicating() {
-		for (Node node : nodesMap.values()) {			
+		for (Node node : nodesMap.values()) {		
+			System.out.println(String.format("\nSEND at node %d", node.id));
 			while (node.hasMessageToSend()) {
 				Message message = node.getMessage();
 				this.sendMessage(message);					
@@ -117,7 +127,7 @@ public class Network {
 	}
 	
 	public void sendMessage(Message message) {
-		System.out.println("Sending: " + message.type);
+		System.out.println("Sending " + message.toString());
 		
 		if (message.type == MessageType.DISCOVER) {
 			Node currentNode = this.getNode(message.senderId);

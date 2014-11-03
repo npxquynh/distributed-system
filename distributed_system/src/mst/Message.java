@@ -29,5 +29,9 @@ public class Message {
 		
 		return result;
 	}
+	
+	public String toString() {
+		return String.format("%d\t%d\t%s\t[%s]", senderId, receiverId, String.valueOf(type), content);
+	}
 
 }
