@@ -136,6 +136,15 @@ public class Node {
 				else if (message.type == MessageType.TEST) {
 					this.processTestMessage(message);
 				}
+				else if (message.type == MessageType.REPORT) {
+					this.processReportMessage(message);
+				}
+				else if (message.type == MessageType.REJECT) {
+					this.processRejectMessage(message);
+				}
+				else if (message.type == MessageType.CHANGEROOT) {
+					this.processChangeRootMessage(message);
+				}
 			}
 		}
 	}
@@ -324,8 +333,9 @@ public class Node {
 		
 		if (currentEdge.getStateEdge() == SE.BASIC) {
 			currentEdge.setStateEdge(SE.REJECTED);
-			this.test();
 		}
+		
+		this.test();
 	}
 	
 	/**
@@ -337,29 +347,33 @@ public class Node {
 		if (currentEdge == null) return;
 		
 		int j = currentEdge.other(this.id);
-		
 		double w = Double.valueOf(message.content);
+		
+		System.out.println(String.format("............. Report j = %d w = %f", j, w));
+		System.out.println(String.format("............. Report %d inBranch %d", this.id, this.inBranch));
 		
 		if (j != this.inBranch) {
 			this.findCount = this.findCount - 1;
 			
 			if (w < this.bestWeight) {
+				System.out.println(String.format("............. Report reset bestWeight %f bestEdge %d", w, j));
 				this.bestWeight = w;
 				this.bestEdge = j;
 				
-				this.report();
 			}
-			else if (this.stateNode == SN.FIND) {
-					// TODO check whether send/receive
-					this.receiveMessage(message);
-			}
-			else if (w > this.bestWeight) {
-				this.changeRoot();
-			}
-			else if (w == this.bestWeight) {
-				// TODO how to halt everything
-				System.out.println("SERIOUS ERROR WITH THE SAME WEIGHT");
-			}
+			this.report();
+		}
+		else if (this.stateNode == SN.FIND) {
+				// TODO check whether send/receive
+				this.receiveMessage(message);
+		}
+		else if (w > this.bestWeight) {
+			this.changeRoot();
+			System.out.println("^^^^^^ Change root");
+		}
+		else if (w == this.bestWeight && w == Double.POSITIVE_INFINITY) {
+			// TODO how to halt everything
+			System.out.println("SERIOUS ERROR WITH THE SAME WEIGHT");
 		}
 	}
 	
@@ -448,7 +462,6 @@ public class Node {
 			
 			Message testMessage = new Message(senderId, receiverId,
 					MessageType.TEST, content);
-			
 			this.sendMessage(testMessage);
 		}
 		else {
