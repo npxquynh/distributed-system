@@ -154,26 +154,26 @@ public class Node {
 		
 		if (this.stateNode == SN.SLEEPING) {
 			this.wakeUp();
-			if (levelConnect < levelNode) {
-				currentEdge.setStateEdge(SE.BRANCH);
-				
-				// TODO think about way to code the message
-				int senderId = this.id;
-				int receiverId = message.senderId;
-				String content = String.format("%s\t%f\t%s", this.levelNode, 
-						this.fragmentIdentity, this.stateNode);
-				
-				Message initiateMessage = new Message(senderId, receiverId,
-						MessageType.CONNECT, content);
-				this.sendMessage(initiateMessage);
-				
-				if (this.stateNode == SN.FIND) {
-					this.findCount += 1;
-				}
+		}
+			
+		if (levelConnect < levelNode) {
+			currentEdge.setStateEdge(SE.BRANCH);
+			
+			// TODO think about way to code the message
+			int senderId = this.id;
+			int receiverId = message.senderId;
+			String content = String.format("%s\t%f\t%s", this.levelNode, 
+					this.fragmentIdentity, this.stateNode);
+			
+			Message initiateMessage = new Message(senderId, receiverId,
+					MessageType.INITIATE, content);
+			this.sendMessage(initiateMessage);
+			
+			if (this.stateNode == SN.FIND) {
+				this.findCount += 1;
 			}
 		}
 		else if (currentEdge.getStateEdge() == SE.BASIC) {
-			System.out.println("Basic");
 			this.receiveMessage(message); // put message on end of queue
 		} else {
 			// TODO think about way to code the message

@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import mst.Message.MessageType;
 
@@ -60,11 +61,11 @@ public class Network {
 		 * TASK 2: CREATE MINIMUM SPANNING TREE
 		 */
 		
+		int count = 0;
 		this.wakeUpAllNodes();
 		
-		int count = 0;
-		
 		while (count < 10) {
+//			this.wakeUpRandomNodes();
 			count += 1;
 //		while (this.isCreatingMST()) {
 			System.out.println(String.format("\n ========== COMMUNICATING %d ========", count));
@@ -171,13 +172,25 @@ public class Network {
 		}
 	}
 	
+	public void wakeUpRandomNodes() {
+		int max = nodesMap.size();
+		int min = 0;
+		Random rand = new Random();
+		int randomNum = rand.nextInt((max - min) + 1) + min;
+		
+		int count = 0;
+		for (Node node : nodesMap.values()) {
+			if (count == randomNum) {
+				node.wakeUp();
+			}
+		}
+	}
+	
 	public void wakeUpAllNodes() {
 		for (Node node : nodesMap.values()) {
 			node.wakeUp();
 		}
 	}
-	
-
 	
 	public double getMinBudget() {
 		return minBudget;
